@@ -76,38 +76,101 @@ const originalPaths = computed(() => {
   return curves.filter(curve => curve.length > 1 && curve.every(Boolean)).map(curve => curve.map((p, i) => `${i ? 'L' : 'M'} ${p.x.toFixed(4)} ${p.y.toFixed(4)}`).join(' '))
 })
 
-let worker, disposed = false, requested = 0, requestTimer, toastTimer, raf
+let worker, prewarmWorker, disposed = false, requested = 0, requestTimer, toastTimer, raf
+const orbitCache = new Map()
+let orbitCacheBaseKey = ''
+const orbitAngles = Array.from({ length: 17 }, (_, index) => -16 + index * 2)
 let lastOrbit = 0, phase = 0, pointerStart
 function currentParams() {
   const size = renderSize.value
   return { width: size[0], height: size[1], shape: shape.value, depth: depth.value, cameraAz: cameraAz.value, cameraEl: cameraEl.value, lightAz: lightAz.value, lightEl: lightEl.value, sourceSize: sourceSize.value, mode: mode.value, samplingDensity: samplingDensity.value, customPoints: customPoints.value, customId: customId.value }
 }
+function orbitKey(params) {
+  return [params.width, params.height, params.shape, params.depth, params.cameraEl, params.lightAz, params.lightEl, params.sourceSize, params.mode, params.samplingDensity, params.customId].join('/')
+}
+function isDefaultView(params) {
+  return params.shape === 3 && params.depth === 1 && params.cameraAz === 0 && params.cameraEl === 20 && params.lightAz === 0 && params.lightEl === 55 && params.sourceSize === 0.8 && params.mode === 0 && params.samplingDensity === 1 && Boolean(params.customPoints)
+}
+function paintFrame(frame) {
+  if (!canvas.value) return
+  if (canvas.value.width !== frame.width || canvas.value.height !== frame.height) {
+    canvas.value.width = frame.width; canvas.value.height = frame.height
+  }
+  const context = canvas.value.getContext('2d', { alpha: false })
+  if (frame.bitmap) context.drawImage(frame.bitmap, 0, 0, frame.width, frame.height)
+  else if (frame.pixels) context.putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0)
+}
+function cachedOrbitFrame(params) {
+  if (!autoOrbit.value || quality.value !== 'ultra' || mode.value !== 0 || orbitKey(params) !== orbitCacheBaseKey || !orbitCache.size) return null
+  let closest = null, distance = Infinity
+  for (const frame of orbitCache.values()) {
+    const currentDistance = Math.abs(frame.cameraAz - params.cameraAz)
+    if (currentDistance < distance) { distance = currentDistance; closest = frame }
+  }
+  return distance <= 2.1 ? closest : null
+}
 function render() {
   if (!ready.value || !worker || disposed) return
-  worker.postMessage({ type: 'render', id: ++requested, params: currentParams() })
+  const params = currentParams()
+  const id = ++requested
+  const cached = cachedOrbitFrame(params)
+  if (cached) { paintFrame(cached); return }
+  worker.postMessage({ type: 'render', id, params })
 }
 function queueRender() {
   clearTimeout(requestTimer)
   requestTimer = setTimeout(() => render(), 24)
 }
 function startWorker() {
-  worker?.terminate(); ready.value = false; error.value = false
+  worker?.terminate(); prewarmWorker?.terminate(); prewarmWorker = null
+  orbitCache.clear(); orbitCacheBaseKey = ''
+  ready.value = false; error.value = false
   worker = new Worker(new URL('./renderer.worker.js', import.meta.url), { type: 'module' })
   worker.onmessage = ({ data }) => {
     if (disposed) return
-    if (data.type === 'ready') { ready.value = true; render(); return }
+    if (data.type === 'ready') { ready.value = true; render(); startOrbitPrewarm(); return }
     if (data.type === 'error') { error.value = true; ready.value = false; return }
     if (data.type !== 'frame' || data.id !== requested) return
     count.value = data.count
     if (data.geometry) geometry.value = Array.from(new Float32Array(data.geometry))
     arcSpan.value = data.span
-    if (data.pixels && canvas.value) {
-      canvas.value.width = data.width; canvas.value.height = data.height
-      canvas.value.getContext('2d', { alpha: false }).putImageData(new ImageData(new Uint8ClampedArray(data.pixels), data.width, data.height), 0, 0)
-    }
+    if (data.pixels) paintFrame({ pixels: new Uint8ClampedArray(data.pixels), width: data.width, height: data.height })
   }
   worker.onerror = () => { error.value = true; ready.value = false }
   worker.postMessage({ type: 'init' })
+}
+function startOrbitPrewarm() {
+  const base = currentParams()
+  if (!isDefaultView(base) || orbitCacheBaseKey) return
+  const params = { ...base, width: 1920, height: 1440 }
+  orbitCacheBaseKey = orbitKey(params)
+  prewarmWorker = new Worker(new URL('./renderer.worker.js', import.meta.url), { type: 'module' })
+  prewarmWorker.onmessage = async ({ data }) => {
+    if (disposed || !prewarmWorker) return
+    if (data.type === 'ready') {
+      prewarmWorker.postMessage({ type: 'prewarm-orbit', params, angles: orbitAngles })
+      return
+    }
+    if (data.type === 'orbit-frame') {
+      const frame = { cameraAz: data.cameraAz, width: data.width, height: data.height, count: data.count, span: data.span }
+      try {
+        if (typeof createImageBitmap === 'function') {
+          frame.bitmap = await createImageBitmap(new ImageData(new Uint8ClampedArray(data.pixels), data.width, data.height))
+        } else {
+          frame.pixels = new Uint8ClampedArray(data.pixels)
+        }
+      } catch {
+        frame.pixels = new Uint8ClampedArray(data.pixels)
+      }
+      if (!disposed && orbitCacheBaseKey === orbitKey(params)) orbitCache.set(frame.cameraAz, frame)
+      return
+    }
+    if (data.type === 'orbit-complete') {
+      prewarmWorker.terminate(); prewarmWorker = null
+    }
+  }
+  prewarmWorker.onerror = () => { prewarmWorker?.terminate(); prewarmWorker = null }
+  prewarmWorker.postMessage({ type: 'init' })
 }
 function clearCustom() { customPoints.value = null; customName.value = ''; customSvgText.value = ''; sourceCurves.value = []; customId.value++; importError.value = false }
 function choosePreset(id) {
@@ -193,7 +256,7 @@ function exportPattern() {
   clone.prepend(style); saveFile(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'scratch-pattern.svg'); toast('exportedSvg')
 }
 onMounted(() => { choosePreset(3); startWorker(); raf = requestAnimationFrame(loop) })
-onBeforeUnmount(() => { disposed = true; worker?.terminate(); cancelAnimationFrame(raf); clearTimeout(requestTimer); clearTimeout(toastTimer) })
+onBeforeUnmount(() => { disposed = true; worker?.terminate(); prewarmWorker?.terminate(); cancelAnimationFrame(raf); clearTimeout(requestTimer); clearTimeout(toastTimer); orbitCache.clear() })
 </script>
 
 <template>
