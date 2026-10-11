@@ -9,11 +9,8 @@ const GRID: usize = 64;
 const EXTENT: f32 = 1.08;
 const SPAN: f32 = 0.50; // +/- 28.6 degrees of each physically fixed circular arc
 const WIDTH: f32 = 0.0022;
-const CAMERA_DISTANCE: f32 = 5.6;
+const CAMERA_DISTANCE: f32 = 4.2;
 const LIGHT_DISTANCE: f32 = 4.0;
-const DISC_HEIGHT: f32 = 0.0;
-// Keep a visible gap between the disc and the fixed studio plane.
-const STUDIO_PLANE_HEIGHT: f32 = -0.55;
 const NOMINAL_CAMERA_ELEVATION: f32 = 20.0;
 const NOMINAL_LIGHT_ELEVATION: f32 = 55.0;
 
@@ -30,12 +27,6 @@ fn orbit(az: f32, el: f32, distance: f32) -> V {
     [distance*a.sin()*e.cos(),distance*e.sin(),distance*a.cos()*e.cos()]
 }
 fn reflect(l: V, n: V) -> V { sub(mul(n,2.0*dot(n,l)),l) }
-fn disc_basis(az:f32,el:f32)->(V,V,V) {
-    let a=az.to_radians(); let e=el.to_radians();
-    let (sa,ca)=a.sin_cos(); let (se,ce)=e.sin_cos();
-    ([ca,sa,0.0],[-sa*ce,ca*ce,se],[-sa*se,ca*se,ce])
-}
-fn to_local(p:V,u:V,v:V,n:V)->V { [dot(p,u),dot(p,v),dot(p,n)] }
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -199,73 +190,45 @@ impl Engine {
         }
         color
     }
-    fn trace(&self, origin:V, ray:V, light:V, local_origin:V, local_light:V, sigma:f32, engraving:bool, footprint:f32, basis:(V,V,V)) -> (V,bool) {
-        let (u,v,n)=basis;
-        let local_ray=to_local(ray,u,v,n);
-        let t=(DISC_HEIGHT-local_origin[2])/local_ray[2];
+    fn trace(&self, origin:V, ray:V, light:V, sigma:f32, engraving:bool, footprint:f32) -> (V,bool) {
+        let t=-origin[2]/ray[2];
         if t>0.0 {
-            let p=add(local_origin,mul(local_ray,t));
-            if p[0]*p[0]+p[1]*p[1]<=1.0 { return (self.shade(p,local_origin,local_light,sigma,engraving,footprint),true); }
+            let p=add(origin,mul(ray,t));
+            if p[0]*p[0]+p[1]*p[1]<=1.0 { return (self.shade(p,origin,light,sigma,engraving,footprint),true); }
         }
         // Exact ray-cylinder intersection for the finite thickness of the rim.
-        let a=local_ray[0]*local_ray[0]+local_ray[1]*local_ray[1];
-        let b=2.0*(local_origin[0]*local_ray[0]+local_origin[1]*local_ray[1]);
-        let c=local_origin[0]*local_origin[0]+local_origin[1]*local_origin[1]-1.0;
+        let a=ray[0]*ray[0]+ray[1]*ray[1];
+        let b=2.0*(origin[0]*ray[0]+origin[1]*ray[1]);
+        let c=origin[0]*origin[0]+origin[1]*origin[1]-1.0;
         let discriminant=b*b-4.0*a*c;
         if a>1e-8 && discriminant>0.0 {
             let root=discriminant.sqrt();
             for tt in [(-b-root)/(2.0*a),(-b+root)/(2.0*a)] {
                 if tt<=0.0 { continue; }
-                let p=add(local_origin,mul(local_ray,tt));
+                let p=add(origin,mul(ray,tt));
                 if p[2]>=-0.045 && p[2]<0.0 {
                     let n=unit([p[0],p[1],0.0]);
-                    let h=unit(add(unit(sub(local_light,p)),unit(sub(local_origin,p))));
+                    let h=unit(add(unit(sub(light,p)),unit(sub(origin,p))));
                     let k=dot(n,h).max(0.0).powf(24.0)*0.45+0.025;
                     return ([k,k*0.95,k*0.87],true);
                 }
             }
         }
         // Studio backing plane and an actual visibility/shadow ray to the LED.
-        // The disc stays at DISC_HEIGHT while the studio plane is fixed below
-        // it. Camera orbit changes only the view of this world, never the
-        // plane itself.
-        let tg=(STUDIO_PLANE_HEIGHT-origin[2])/ray[2];
+        let tg=(-0.20-origin[2])/ray[2];
         let p=add(origin,mul(ray,tg.max(0.0)));
         let to_light=sub(light,p);
-        // Give the plate a little contact shadow and let the uncovered light
-        // fall off across the backing plane.  The values stay deliberately
-        // low so the stage remains black while the disc no longer appears to
-        // float in an empty void.
-        let distance_sq=dot(to_light,to_light).max(1e-6);
-        let distance=distance_sq.sqrt();
-        let incidence=(to_light[2]/distance).max(0.0);
-        let light_falloff=(LIGHT_DISTANCE*LIGHT_DISTANCE/distance_sq).min(1.4);
-        // Project the disc centre through the fixed light onto the fixed
-        // plane. This is the shadow's world-space anchor, so it does not
-        // follow the camera orbit.
-        let disc_center=[0.0,0.0,DISC_HEIGHT];
-        let gap=DISC_HEIGHT-STUDIO_PLANE_HEIGHT;
-        let shadow_t=(STUDIO_PLANE_HEIGHT-light[2])/(DISC_HEIGHT-light[2]);
-        let shadow_center=add(light,mul(sub(disc_center,light),shadow_t));
-        let projected_radius=(1.0-shadow_t).abs().max(0.18);
-        let sx=(p[0]-shadow_center[0])/(projected_radius*(0.42+0.64*n[2].abs()));
-        let sy=(p[1]-shadow_center[1])/(projected_radius*1.06);
-        let shadow_shape=(-((sx*sx)+(sy*sy)).powi(2)).exp();
-        let occlusion=1.0-shadow_shape*0.78;
-        let plane_distance=(p[0]-light[0]).powi(2)+(p[1]-light[1]).powi(2);
-        let spill=incidence*light_falloff*0.009/(1.0+0.45*plane_distance);
-        let value=(spill*occlusion + shadow_shape*0.003*(gap/0.55).clamp(0.6,1.5)).clamp(0.0,0.035);
-        ([value,value*0.96,value*0.90],false)
+        let at=-p[2]/to_light[2];
+        let blocked=add(p,mul(to_light,at));
+        let shadow=at>0.0 && at<1.0 && blocked[0]*blocked[0]+blocked[1]*blocked[1]<1.0;
+        // Keep the camera field pure black: the disc is the only rendered
+        // object, so the demo reads as a floating optical plate.
+        let _ = (shadow, p);
+        ([0.0,0.0,0.0],false)
     }
     fn render(&mut self, az:f32, el:f32, laz:f32, lel:f32, source_size:f32, mode:u32) -> *const u8 {
-        self.render_object(az,el,laz,lel,source_size,mode,0.0,0.0)
-    }
-    fn render_object(&mut self, az:f32, el:f32, laz:f32, lel:f32, source_size:f32, mode:u32, disc_az:f32, disc_el:f32) -> *const u8 {
         let camera=orbit(az.clamp(-70.0,70.0),el.clamp(-60.0,65.0),CAMERA_DISTANCE);
         let light=orbit(laz.clamp(-80.0,80.0),lel.clamp(-70.0,80.0),LIGHT_DISTANCE);
-        let basis=disc_basis(disc_az.clamp(-55.0,55.0),disc_el.clamp(-28.0,28.0));
-        let local_camera=to_local(camera,basis.0,basis.1,basis.2);
-        let local_light=to_local(light,basis.0,basis.1,basis.2);
         let forward=unit(mul(camera,-1.0));
         let right=unit(cross(forward,[0.0,1.0,0.0]));
         let up=unit(cross(right,forward));
@@ -278,7 +241,7 @@ impl Engine {
             let sx=(2.0*(x as f32+0.5)/self.width as f32-1.0)*aspect*fov;
             let sy=(1.0-2.0*(y as f32+0.5)/self.height as f32)*fov;
             let ray=unit(add(forward,add(mul(right,sx),mul(up,sy))));
-            let (color,hit)=self.trace(camera,ray,light,local_camera,local_light,sigma,mode==1,footprint,basis);
+            let (color,hit)=self.trace(camera,ray,light,sigma,mode==1,footprint);
             if hit { active+=1; }
             let i=(y*self.width+x)*4;
             for (j,v) in color.iter().enumerate() {
@@ -295,6 +258,7 @@ impl Engine {
 }
 fn grid_coord(x:f32)->i32 { ((x+EXTENT)/(2.0*EXTENT)*GRID as f32).floor() as i32 }
 fn project_to_plate(p:V,c:V)->V { add(p,mul(sub(c,p),-p[2]/(c[2]-p[2]))) }
+
 thread_local! { static ENGINE:RefCell<Engine>=RefCell::new(Engine::new()); }
 
 #[no_mangle] pub extern "C" fn init(width:u32,height:u32) {
@@ -305,7 +269,6 @@ thread_local! { static ENGINE:RefCell<Engine>=RefCell::new(Engine::new()); }
 #[no_mangle] pub extern "C" fn configure(shape:u32,depth:f32,density:f32) { ENGINE.with(|e|e.borrow_mut().encode(shape,depth,density)); }
 #[no_mangle] pub unsafe extern "C" fn configure_points(ptr:*const f32,count:usize,depth:f32) { if ptr.is_null() { return; } let raw=std::slice::from_raw_parts(ptr,count*3); ENGINE.with(|e|e.borrow_mut().encode_custom(raw,depth)); }
 #[no_mangle] pub extern "C" fn render(az:f32,el:f32,laz:f32,lel:f32,size:f32,mode:u32)->*const u8 { ENGINE.with(|e|e.borrow_mut().render(az,el,laz,lel,size,mode)) }
-#[no_mangle] pub extern "C" fn render_object(az:f32,el:f32,laz:f32,lel:f32,size:f32,mode:u32,disc_az:f32,disc_el:f32)->*const u8 { ENGINE.with(|e|e.borrow_mut().render_object(az,el,laz,lel,size,mode,disc_az,disc_el)) }
 #[no_mangle] pub extern "C" fn scratch_count()->u32 { ENGINE.with(|e|e.borrow().scratches.len() as u32) }
 #[no_mangle] pub extern "C" fn geometry_ptr()->*const f32 { ENGINE.with(|e|e.borrow().geometry.as_ptr()) }
 #[no_mangle] pub extern "C" fn active_pixels()->u32 { ENGINE.with(|e|e.borrow().active) }

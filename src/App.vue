@@ -18,17 +18,13 @@ watch(language, value => {
 }, { immediate: true })
 
 const canvas = ref(null), ready = ref(false), error = ref(false), count = ref(0)
-const shape = ref(3), depth = ref(1), cameraAz = ref(0), cameraEl = ref(20), discAz = ref(0), discEl = ref(0)
+const shape = ref(3), depth = ref(1), cameraAz = ref(0), cameraEl = ref(20)
 const lightAz = ref(0), lightEl = ref(55), sourceSize = ref(0.8)
 const mode = ref(0), quality = ref('standard'), zoom = ref(1), autoOrbit = ref(false)
 const dragging = ref(false), exported = ref(''), fileInput = ref(null)
 const customPoints = ref(null), customId = ref(0), customName = ref(''), importError = ref(false)
 const geometry = ref([]), customSvgText = ref(''), sourceCurves = ref([])
 const samplingDensity = ref(1), showSamples = ref(false), svgOffset = ref({ x: 0, y: 0 })
-const DISC_AZ_LIMIT = 55
-const DISC_EL_LIMIT = 28
-const clampDiscAz = value => Math.max(-DISC_AZ_LIMIT, Math.min(DISC_AZ_LIMIT, value))
-const clampDiscEl = value => Math.max(-DISC_EL_LIMIT, Math.min(DISC_EL_LIMIT, value))
 const arcSpan = ref(0.5), svgElement = ref(null), clipId = `disc-${useId()}`
 const presets = [{ id: 0, key: 'cube', icon: '◇' }, { id: 1, key: 'helix', icon: '⌁' }, { id: 2, key: 'arc', icon: '⌒' }, { id: 3, key: 'signature', icon: '✎' }]
 const plus = value => `${value > 0 ? '+' : ''}${Math.round(value)}°`
@@ -84,7 +80,7 @@ let worker, disposed = false, requested = 0, requestTimer, toastTimer, raf
 let lastOrbit = 0, phase = 0, pointerStart
 function currentParams() {
   const size = renderSize.value
-  return { width: size[0], height: size[1], shape: shape.value, depth: depth.value, cameraAz: cameraAz.value, cameraEl: cameraEl.value, discAz: discAz.value, discEl: discEl.value, lightAz: lightAz.value, lightEl: lightEl.value, sourceSize: sourceSize.value, mode: mode.value, samplingDensity: samplingDensity.value, customPoints: customPoints.value, customId: customId.value }
+  return { width: size[0], height: size[1], shape: shape.value, depth: depth.value, cameraAz: cameraAz.value, cameraEl: cameraEl.value, lightAz: lightAz.value, lightEl: lightEl.value, sourceSize: sourceSize.value, mode: mode.value, samplingDensity: samplingDensity.value, customPoints: customPoints.value, customId: customId.value }
 }
 function render() {
   if (!ready.value || !worker || disposed) return
@@ -137,21 +133,21 @@ async function importSvg(event) {
   try { applySvg(await file.text(), file.name) } catch { importError.value = true }
 }
 watch(samplingDensity, () => { resampleCustom(); queueRender() })
-watch([shape, depth, cameraAz, cameraEl, discAz, discEl, lightAz, lightEl, sourceSize, mode, quality, customId], queueRender)
+watch([shape, depth, cameraAz, cameraEl, lightAz, lightEl, sourceSize, mode, quality, customId], queueRender)
 watch(mode, () => { dragging.value = false; pointerStart = null; autoOrbit.value = false })
 function startDrag(event) {
   if (event.button !== 0) return
   autoOrbit.value = false; dragging.value = true
-  pointerStart = { x: event.clientX, y: event.clientY, az: discAz.value, el: discEl.value, offset: { ...svgOffset.value } }
+  pointerStart = { x: event.clientX, y: event.clientY, az: cameraAz.value, el: cameraEl.value, offset: { ...svgOffset.value } }
   event.currentTarget.setPointerCapture(event.pointerId)
 }
 function moveDrag(event) {
   if (!dragging.value || !pointerStart) return
   const dx = event.clientX - pointerStart.x, dy = event.clientY - pointerStart.y
   if (mode.value === 1) { svgOffset.value = { x: pointerStart.offset.x + dx, y: pointerStart.offset.y + dy }; return }
-  const scale = 55 / event.currentTarget.getBoundingClientRect().width
-  discAz.value = Number(clampDiscAz(pointerStart.az - dx * scale).toFixed(1))
-  discEl.value = Number(clampDiscEl(pointerStart.el + dy * scale).toFixed(1))
+  const scale = 100 / event.currentTarget.getBoundingClientRect().width
+  cameraAz.value = Math.round(Math.max(-65, Math.min(65, pointerStart.az - dx * scale)))
+  cameraEl.value = Math.round(Math.max(-45, Math.min(60, pointerStart.el + dy * scale)))
 }
 function stopDrag() { if (!dragging.value) return; dragging.value = false; pointerStart = null; queueRender() }
 function keyboardView(event) {
@@ -161,24 +157,24 @@ function keyboardView(event) {
   event.preventDefault(); autoOrbit.value = false
   const [x, y] = changes[event.key]
   if (mode.value === 1) { svgOffset.value = { x: svgOffset.value.x + x * 8, y: svgOffset.value.y - y * 8 }; return }
-  discAz.value = clampDiscAz(discAz.value + x); discEl.value = clampDiscEl(discEl.value + y)
+  cameraAz.value = Math.max(-65, Math.min(65, cameraAz.value + x)); cameraEl.value = Math.max(-45, Math.min(60, cameraEl.value + y))
 }
-function centerView() { zoom.value = 1; discAz.value = 0; discEl.value = 0; svgOffset.value = { x: 0, y: 0 } }
+function centerView() { zoom.value = 1; svgOffset.value = { x: 0, y: 0 } }
 function reset() {
-  autoOrbit.value = false; cameraAz.value = 0; cameraEl.value = 20; discAz.value = 0; discEl.value = 0; lightAz.value = 0; lightEl.value = 55; sourceSize.value = 0.8
+  autoOrbit.value = false; cameraAz.value = 0; cameraEl.value = 20; lightAz.value = 0; lightEl.value = 55; sourceSize.value = 0.8
   depth.value = 1; samplingDensity.value = 1; quality.value = 'standard'; centerView(); phase = 0
 }
 function changeZoom(delta) { zoom.value = Math.max(0.5, Math.min(4, Number((zoom.value + delta).toFixed(2)))) }
 function handleZoom(event) { changeZoom(event.deltaY > 0 ? -0.15 : 0.15) }
 function toggleOrbit() {
   autoOrbit.value = !autoOrbit.value
-  if (autoOrbit.value) { phase = Math.asin(Math.max(-1, Math.min(1, discAz.value / 16))); lastOrbit = performance.now() }
+  if (autoOrbit.value) { phase = Math.asin(Math.max(-1, Math.min(1, cameraAz.value / 16))); lastOrbit = performance.now() }
   else queueRender()
 }
 function loop(time) {
   if (autoOrbit.value && ready.value && !dragging.value && time - lastOrbit > 90) {
     phase += Math.min(200, time - lastOrbit) * 0.00055
-    discAz.value = Number((Math.sin(phase) * 16).toFixed(1)); lastOrbit = time
+    cameraAz.value = Number((Math.sin(phase) * 16).toFixed(1)); lastOrbit = time
   }
   raf = requestAnimationFrame(loop)
 }

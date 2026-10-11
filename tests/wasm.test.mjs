@@ -36,18 +36,6 @@ test('WASM exposes the camera-ray renderer and produces a frame', async () => {
   assert.ok(litEnergy > 100000, 'rendered frame should contain visible geometry')
 })
 
-test('disc orbit changes the object while keeping the render world fixed', async () => {
-  const wasm = await load()
-  wasm.init(160, 120)
-  wasm.configure(0, 1, 1)
-  assert.equal(typeof wasm.render_object, 'function')
-  const flatPtr = wasm.render_object(0, 20, 0, 55, 0.8, 0, 0, 0)
-  const flat = new Uint8Array(wasm.memory.buffer, flatPtr, 160 * 120 * 4).slice()
-  const tiltedPtr = wasm.render_object(0, 20, 0, 55, 0.8, 0, 34, 22)
-  const tilted = new Uint8Array(wasm.memory.buffer, tiltedPtr, 160 * 120 * 4).slice()
-  assert.notDeepEqual(flat, tilted)
-})
-
 test('WASM pattern presets change their encoded geometry', async () => {
   const wasm = await load()
   wasm.init(160, 120)
