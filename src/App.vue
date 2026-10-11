@@ -79,7 +79,7 @@ const originalPaths = computed(() => {
 let worker, prewarmWorker, disposed = false, requested = 0, requestTimer, toastTimer, raf
 const orbitCache = new Map()
 let orbitCacheBaseKey = ''
-const orbitAngles = Array.from({ length: 17 }, (_, index) => -16 + index * 2)
+const orbitAngles = Array.from({ length: 25 }, (_, index) => Number((-16 + index * (32 / 24)).toFixed(2)))
 let lastOrbit = 0, phase = 0, pointerStart
 function currentParams() {
   const size = renderSize.value
