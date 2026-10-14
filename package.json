@@ -6,10 +6,19 @@
   "scripts": {
     "dev": "npm run build:wasm && vite --host 127.0.0.1",
     "build:wasm": "node scripts/build-wasm.mjs",
-    "build": "npm run build:wasm && vite build",
-    "test": "cargo test --manifest-path wasm/Cargo.toml && node --test tests/wasm.test.mjs",
-    "preview": "vite preview --host 127.0.0.1"
+    "check:independence": "node scripts/check-independence.mjs",
+    "build": "npm run check:independence && npm run build:wasm && vite build",
+    "test": "npm run check:independence && npm run build:wasm && cargo test --locked --manifest-path wasm/Cargo.toml && node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:gpu": "playwright test --config playwright.gpu.config.mjs"
   },
-  "dependencies": { "vue": "^3.5.22" },
-  "devDependencies": { "@vitejs/plugin-vue": "^6.0.1", "vite": "^7.1.9" }
+  "dependencies": {
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.9"
+  }
 }

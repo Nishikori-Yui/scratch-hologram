@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 async function load() {
-  const bytes = await readFile(new URL('../public/wasm/hologram.wasm', import.meta.url))
+  const bytes = await readFile(new URL('../src/assets/scratch-hologram.wasm', import.meta.url))
   const { instance } = await WebAssembly.instantiate(bytes, {})
   return instance.exports
 }
@@ -31,7 +31,9 @@ test('WASM exposes the camera-ray renderer and produces a frame', async () => {
   const pointer = wasm.render(0, 20, 0, 55, 0.8, 0)
   const pixels = new Uint8Array(wasm.memory.buffer, pointer, 160 * 120 * 4)
   assert.equal(pixels.length, 76800)
-  assert.equal(pixels[3], 255)
+  const alphas = Array.from(pixels).filter((_, index) => index % 4 === 3)
+  assert.ok(alphas.includes(255), 'disc pixels should be opaque')
+  assert.ok(alphas.includes(0), 'outside the disc should allow a transparent background')
   const litEnergy = pixels.reduce((sum, value) => sum + value, 0)
   assert.ok(litEnergy > 100000, 'rendered frame should contain visible geometry')
 })
