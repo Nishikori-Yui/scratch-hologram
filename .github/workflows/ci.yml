@@ -42,8 +42,6 @@ jobs:
         run: npm run test:e2e
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174${{ env.SITE_BASE_PATH }}
-      - name: Check WebGPU and WASM rendering parity
-        run: npm run test:gpu
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

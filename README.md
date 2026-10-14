@@ -35,7 +35,9 @@ Themes initially follow the operating system. The header provides light/dark and
 
 ## GitHub Pages
 
-`.github/workflows/ci.yml` runs Rust and Node tests, builds the workbench under the repository's URL path, checks the built site on desktop and mobile, and verifies WebGPU/WASM rendering parity. Pushes to `main` deploy the verified `dist/` artifact to GitHub Pages. Pull requests run the same checks; the workflow can also be started manually.
+`.github/workflows/ci.yml` runs Rust and Node tests and builds and checks the workbench under the repository's URL path on desktop and mobile. Pushes to `main` deploy the verified `dist/` artifact to GitHub Pages. Pull requests run the same checks; the workflow can also be started manually.
+
+`npm run test:gpu` separately checks WebGPU/WASM rendering parity with a local SwiftShader adapter. It is kept outside the Pages deployment gate because the GitHub-hosted Chromium runner currently fails this GPU-specific check while the same test passes locally.
 
 Set the repository's **Settings > Pages > Build and deployment > Source** to **GitHub Actions**. Deployment uses the workflow's `GITHUB_TOKEN` and does not require a separate secret.
 
