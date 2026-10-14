@@ -657,7 +657,7 @@ onBeforeUnmount(() => { disposed = true; worker?.terminate(); cancelAnimationFra
   --control-radius: 0;
   color: var(--c-fg);
   background: var(--c-bg);
-  color-scheme: light;
+  color-scheme: inherit;
 }
 .scratch-hologram-studio.studio {
   width: 100%;

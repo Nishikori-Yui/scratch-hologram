@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Reconstruct a 3D image with scratches. Adjust the light, viewing angle, and scratch density to see a shape emerge from a reflective disc." />
   <title>Scratch Hologram</title>
+  <script>
+    ;(() => {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      let scheme = 'auto'
+      let soft = false
+      try {
+        scheme = localStorage.getItem('scratch-hologram-color-scheme') || 'auto'
+        soft = localStorage.getItem('scratch-hologram-soft-theme') === 'true'
+      }
+      catch {}
+      document.documentElement.classList.toggle('dark', scheme === 'dark' || (scheme !== 'light' && prefersDark))
+      document.documentElement.classList.toggle('soft-theme', soft)
+    })()
+  </script>
 </head>
 <body><div id="app"></div><script type="module" src="/src/main.js"></script></body>
 </html>

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import DemoLanguageSwitch from './components/DemoLanguageSwitch.vue'
 import ScratchHologramEmbed from './components/ScratchHologramEmbed.vue'
+import ThemeControls from './components/ThemeControls.vue'
 
 const language = ref<'zh' | 'en'>('en')
 const interactionEnabled = ref(false)
@@ -24,11 +25,11 @@ watch(language, (value) => {
 <template>
   <div class="scratch-hologram-page">
     <header class="demo-page-header">
+      <div class="demo-page-header__top">
+        <ThemeControls :locale="language" />
+      </div>
       <div class="demo-page-header__main">
         <div class="demo-page-header__copy">
-          <p class="demo-page-header__category">
-            DEMO
-          </p>
           <h1>{{ copy.title }}</h1>
         </div>
         <div class="demo-page-header__language">
