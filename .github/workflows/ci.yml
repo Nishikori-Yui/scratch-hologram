@@ -1,0 +1,73 @@
+name: CI and GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SITE_BASE_PATH: /${{ github.event.repository.name }}/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Set up Rust and WASM target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Install dependencies
+        run: npm ci
+      - name: Test Rust and Node code
+        run: npm test
+      - name: Build for GitHub Pages
+        run: npm run build -- --base "$SITE_BASE_PATH"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test the Pages build on desktop and mobile
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174${{ env.SITE_BASE_PATH }}
+      - name: Check WebGPU and WASM rendering parity
+        run: npm run test:gpu
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -6,7 +6,7 @@ test('theme controls apply four palettes in both languages and narrow layouts', 
   test.setTimeout(60_000)
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.locator('.loading-layer')).toHaveCount(0)
   const scheme = page.locator('.theme-scheme-toggle')
   const tone = page.locator('.theme-tone-toggle')
@@ -92,7 +92,7 @@ test('theme controls apply four palettes in both languages and narrow layouts', 
 })
 
 test('system preference, saved overrides and storage events stay in sync', async ({ page, context }) => {
-  await page.goto('/')
+  await page.goto('./')
   const scheme = page.locator('.theme-scheme-toggle')
   const tone = page.locator('.theme-tone-toggle')
   await expect(scheme).toHaveAttribute('aria-pressed', 'false')
@@ -108,7 +108,7 @@ test('system preference, saved overrides and storage events stay in sync', async
   await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(245, 245, 242)')
 
   const other = await context.newPage()
-  await other.goto('/')
+  await other.goto('./')
   await expect(other.locator('.theme-tone-toggle')).toHaveAttribute('aria-pressed', 'true')
   await other.locator('.theme-scheme-toggle').click()
   await expect(scheme).toHaveAttribute('aria-pressed', 'true')
@@ -144,7 +144,7 @@ test('saved appearance is applied before the Vue bundle loads', async ({ page })
     await route.continue()
   })
   try {
-    await page.goto('/', { waitUntil: 'commit' })
+    await page.goto('./', { waitUntil: 'commit' })
     await expect(page.locator('html')).toHaveClass(/dark/)
     await expect(page.locator('html')).toHaveClass(/soft-theme/)
     await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(27, 27, 27)')
@@ -174,7 +174,7 @@ test('transitions animate from the control and respect reduced motion and API fa
       return animate.call(this, frames, options)
     }
   })
-  await page.goto('/')
+  await page.goto('./')
   const scheme = page.locator('.theme-scheme-toggle')
   const tone = page.locator('.theme-tone-toggle')
   const outline = tone.locator('.theme-tone-icon__outline')
@@ -210,7 +210,7 @@ test('theme controls remain usable when browser storage is blocked', async ({ pa
       get() { throw new DOMException('Storage blocked', 'SecurityError') },
     })
   })
-  await page.goto('/')
+  await page.goto('./')
   await page.getByRole('button', { name: 'Toggle color scheme', exact: true }).click()
   await page.getByRole('button', { name: 'Soft tone', exact: true }).click()
   await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(27, 27, 27)')

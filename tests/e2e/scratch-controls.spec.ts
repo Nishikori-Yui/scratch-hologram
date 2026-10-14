@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('geometry shows encoding controls and preserves reflection settings', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.locator('.loading-layer')).toHaveCount(0)
   const animationIcon = page.locator('.scene-selector .i-carbon-video-player')
   await expect(animationIcon).toBeVisible()

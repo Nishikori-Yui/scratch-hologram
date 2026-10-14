@@ -9,7 +9,7 @@ test('standalone renders pixels, imports SVG, changes quality and exports locall
     if (url.protocol.startsWith('http') && url.origin !== 'http://127.0.0.1:5174')
       external.push(request.url())
   })
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.locator('.loading-layer')).toHaveCount(0)
   await expect.poll(() => page.locator('canvas').evaluate((canvas: HTMLCanvasElement) => {
     const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data

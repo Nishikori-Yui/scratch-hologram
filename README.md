@@ -2,6 +2,8 @@
 
 Independent Vue workbench for scratch holograms: static patterns, imported SVGs, rotating signature animation, reflection and scratch geometry views, and render diagnostics.
 
+Live workbench: [nishikori-yui.github.io/scratch-hologram/](https://nishikori-yui.github.io/scratch-hologram/).
+
 ## Run
 
 Requires Node.js 22.12+ (or 24+), npm, Rust and the wasm32-unknown-unknown target.
@@ -30,6 +32,19 @@ Build produces a static `dist/` with bundled module worker, shader, WASM, font a
 Themes initially follow the operating system. The header provides light/dark and independent soft-tone toggles, with saved choices applied before the app loads. Selecting the system's current light/dark mode restores automatic tracking, matching the website's behavior. Soft tone uses the website's warm-gray light palette and neutral-gray dark palette. The circular theme transition and tone-icon morph respect reduced motion; theme switching also works without View Transitions or browser storage.
 
 `npm run test:gpu` starts a local Vite development server and explicitly requests the WebGPU backend in Chromium with a SwiftShader software adapter. It compares GPU and WASM pixels for disc tilt, light size, imported SVG geometry and rotating signatures, and checks all four render resolutions. A missing adapter or GPU fallback fails this test. This verifies rendering correctness; it does not measure hardware GPU performance.
+
+## GitHub Pages
+
+`.github/workflows/ci.yml` runs Rust and Node tests, builds the workbench under the repository's URL path, checks the built site on desktop and mobile, and verifies WebGPU/WASM rendering parity. Pushes to `main` deploy the verified `dist/` artifact to GitHub Pages. Pull requests run the same checks; the workflow can also be started manually.
+
+Set the repository's **Settings > Pages > Build and deployment > Source** to **GitHub Actions**. Deployment uses the workflow's `GITHUB_TOKEN` and does not require a separate secret.
+
+To verify the Pages build locally:
+
+```sh
+npm run build -- --base /scratch-hologram/
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:5174/scratch-hologram/ npm run test:e2e
+```
 
 ## Implementation
 

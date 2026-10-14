@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('diagnostics report actual frames, idle update rate and geometry pipeline', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.locator('.loading-layer')).toHaveCount(0)
   const panel = page.locator('.render-diagnostics')
   const value = (key: string) => panel.locator(`[data-metric="${key}"] dd`)
