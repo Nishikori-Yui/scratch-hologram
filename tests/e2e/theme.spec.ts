@@ -32,6 +32,7 @@ test('theme controls apply four palettes in both languages and narrow layouts', 
         await expect(page.locator('html')).toHaveCSS('background-color', palette.background)
         await expect(page.locator('.scratch-hologram-studio')).toHaveCSS('background-color', palette.background)
         await expect(page.locator('.scratch-hologram-studio')).toHaveCSS('color-scheme', palette.dark ? 'dark' : 'light')
+        await page.evaluate(() => window.scrollTo(0, 0))
         const layout = await page.evaluate(() => {
           const root = document.documentElement
           const luminance = (color: string) => {
